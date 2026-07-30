@@ -31,7 +31,7 @@ function login() {
   errorDiv.style.display = 'none';
 
   // !!! ЗАМЕНИ НА СВОЮ ССЫЛКУ ОТ CLOUDFLARE / NGROK !!!
-  const server = 'wss://cgi-pure-supposed-make.trycloudflare.com';
+  const server = 'https://disciplines-architect-brian-rouge.trycloudflare.com';
 
   ws = new WebSocket(server);
 
