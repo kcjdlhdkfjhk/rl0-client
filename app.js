@@ -22,7 +22,6 @@ function login() {
     return;
   }
 
-  // Проверка формата пароля
   if (!/^[a-zA-Z0-9]{5}-[a-zA-Z0-9]{5}-[a-zA-Z0-9]{5}$/.test(pass)) {
     errorDiv.textContent = 'Неверный формат пароля (xxxxx-xxxxx-xxxxx)';
     errorDiv.style.display = 'block';
@@ -31,7 +30,7 @@ function login() {
 
   errorDiv.style.display = 'none';
 
-  // === ЗАМЕНИ ЭТУ ССЫЛКУ НА ТВОЮ ОТ CLOUDFLARE / NGROK ===
+  // !!! ЗАМЕНИ НА СВОЮ ССЫЛКУ ОТ CLOUDFLARE / NGROK !!!
   const server = 'wss://cgi-pure-supposed-make.trycloudflare.com';
 
   ws = new WebSocket(server);
@@ -41,22 +40,26 @@ function login() {
   };
 
   ws.onmessage = (e) => {
-    const data = JSON.parse(e.data);
+    try {
+      const data = JSON.parse(e.data);
 
-    if (data.type === 'auth') {
-      if (data.status === 'ok') {
-        document.getElementById('login').style.display = 'none';
-        document.getElementById('chat').style.display = 'flex';
-        startAutoRefresh();
-      } else {
-        errorDiv.textContent = 'Неверный позывной или пароль';
-        errorDiv.style.display = 'block';
-        ws.close();
+      if (data.type === 'auth') {
+        if (data.status === 'ok') {
+          document.getElementById('login').style.display = 'none';
+          document.getElementById('chat').style.display = 'flex';
+          startAutoRefresh();
+        } else {
+          errorDiv.textContent = 'Неверный позывной или пароль';
+          errorDiv.style.display = 'block';
+          ws.close();
+        }
+      } else if (data.type === 'message') {
+        addMessage(escapeHTML(data.nick) + ': ' + escapeHTML(data.text));
+      } else if (data.type === 'error') {
+        addMessage('[Ошибка] ' + escapeHTML(data.text));
       }
-    } else if (data.type === 'message') {
-      addMessage(escapeHTML(data.nick) + ': ' + escapeHTML(data.text));
-    } else if (data.type === 'error') {
-      addMessage('[Ошибка] ' + escapeHTML(data.text));
+    } catch (err) {
+      console.warn('Ошибка обработки сообщения:', err);
     }
   };
 
@@ -64,12 +67,17 @@ function login() {
     addMessage('=== Отключено ===');
     stopAutoRefresh();
   };
+
+  ws.onerror = () => {
+    errorDiv.textContent = 'Ошибка соединения с сервером';
+    errorDiv.style.display = 'block';
+  };
 }
 
 function send() {
   const input = document.getElementById('msg');
   const text = input.value.trim();
-  if (!text) return;
+  if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
   ws.send(JSON.stringify({ type: 'message', text }));
   addMessage('Я: ' + escapeHTML(text));
   input.value = '';
@@ -101,3 +109,13 @@ function stopAutoRefresh() {
     autoRefreshInterval = null;
   }
 }
+
+// Отправка по Enter
+document.addEventListener('DOMContentLoaded', () => {
+  const msgInput = document.getElementById('msg');
+  if (msgInput) {
+    msgInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') send();
+    });
+  }
+});
