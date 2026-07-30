@@ -31,7 +31,7 @@ function login() {
   errorDiv.style.display = 'none';
 
   // ПОДСТАВЬ СВОЙ IP
-  const server = 'wss://192.168.1.122:3000';
+  const server = 'ws://192.168.1.122:3000';
   ws = new WebSocket(server);
 
   ws.onopen = () => {
