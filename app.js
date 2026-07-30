@@ -22,6 +22,7 @@ function login() {
     return;
   }
 
+  // Проверка формата пароля
   if (!/^[a-zA-Z0-9]{5}-[a-zA-Z0-9]{5}-[a-zA-Z0-9]{5}$/.test(pass)) {
     errorDiv.textContent = 'Неверный формат пароля (xxxxx-xxxxx-xxxxx)';
     errorDiv.style.display = 'block';
@@ -30,8 +31,9 @@ function login() {
 
   errorDiv.style.display = 'none';
 
-  // ПОДСТАВЬ СВОЙ IP
+  // === ЗАМЕНИ ЭТУ ССЫЛКУ НА ТВОЮ ОТ CLOUDFLARE / NGROK ===
   const server = 'wss://cgi-pure-supposed-make.trycloudflare.com';
+
   ws = new WebSocket(server);
 
   ws.onopen = () => {
@@ -79,12 +81,10 @@ function addMessage(text) {
   div.scrollTop = div.scrollHeight;
 }
 
-// === АВТООБНОВЛЕНИЕ (проверка соединения) ===
 function startAutoRefresh() {
   if (autoRefreshInterval) clearInterval(autoRefreshInterval);
   autoRefreshInterval = setInterval(() => {
     if (ws && ws.readyState === WebSocket.OPEN) {
-      // отправляем пинг
       ws.send(JSON.stringify({ type: 'ping' }));
       document.getElementById('status').textContent = '● Подключено';
       document.getElementById('status').style.color = '#33cc33';
