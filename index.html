@@ -1,38 +1,32 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🔴 RedLine Zero</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
-    <link rel="stylesheet" href="style.css">
+  <title>RL0 Chat</title>
+  <link rel="stylesheet" href="style.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🔴 RedLine Zero</h1>
-            <p>Анонимный чат</p>
-        </div>
-
-        <div class="status" id="status">🟢 Подключение...</div>
-
-        <div class="chat">
-            <div class="messages" id="messages">
-                <div class="msg system">Добро пожаловать в RedLine Zero</div>
-            </div>
-
-            <div class="users-list" id="users"></div>
-
-            <div class="input-area">
-                <input type="text" id="username" placeholder="Имя" value="Гость" style="flex: 0.3;">
-                <input type="text" id="message" placeholder="Сообщение..." onkeydown="if(event.key==='Enter') sendMessage()">
-                <button onclick="sendMessage()">➤</button>
-            </div>
-        </div>
-
-        <div class="footer">🔴 RedLine Zero — 2025</div>
+  <div id="app">
+    <div id="login">
+      <div class="logo">⧫ REDLINE ZERO</div>
+      <h2>Вход в чат</h2>
+      <input id="nick" placeholder="Позывной" />
+      <input id="pass" type="password" placeholder="Пароль (xxxxx-xxxxx-xxxxx)" />
+      <button onclick="login()">Войти</button>
+      <div id="error"></div>
     </div>
-
-    <script src="script.js"></script>
+    <div id="chat" style="display:none;">
+      <div class="header">
+        <span>⧫ RL0 CHAT</span>
+        <span id="status">● Подключено</span>
+      </div>
+      <div id="messages"></div>
+      <div class="input-area">
+        <input id="msg" placeholder="Сообщение..." />
+        <button onclick="send()">➤</button>
+      </div>
+    </div>
+  </div>
+  <script src="app.js"></script>
 </body>
 </html>
