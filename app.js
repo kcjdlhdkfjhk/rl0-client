@@ -31,7 +31,7 @@ function login() {
   errorDiv.style.display = 'none';
 
   // === ПОДСТАВЬ СВОЮ ССЫЛКУ ОТ CLOUDFLARE ===
-  const server = 'wss://handbags-chosen-wax-evaluating.trycloudflare.com';
+  const server = 'wss://plug-bingo-grams-automobile.trycloudflare.com';
 
   ws = new WebSocket(server);
 
