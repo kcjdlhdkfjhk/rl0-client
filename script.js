@@ -1,226 +1,128 @@
-const express = require('express');
-const http = require('http');
-const socketIo = require('socket.io');
-const crypto = require('crypto');
-
-const app = express();
-const server = http.createServer(app);
-const io = socketIo(server, {
-    cors: { origin: "*", methods: ["GET", "POST"] }
-});
+// ============================================================
+// 🔴 АДРЕС СЕРВЕРА — ЗАМЕНИ НА СВОЙ
+// ============================================================
+const SERVER_URL = 'https://redline-server.onrender.com';
 
 // ============================================================
-//  РАЗРЕШАЕМ JSON
+//  ПОДКЛЮЧЕНИЕ
 // ============================================================
-app.use(express.json());
+const socket = io(SERVER_URL);
 
-// ============================================================
-//  БАЗА ПОЛЬЗОВАТЕЛЕЙ
-// ============================================================
-const USERS = {
-    'red': {
-        password: 'a7k2p-8r9t4-w3x6z',
-        role: 'Совет',
-        branch: 'R-1'
-    },
-    'shadow': {
-        password: 'm9n5q-2v6b8-y4c3e',
-        role: 'Совет',
-        branch: 'R-2'
-    },
-    'zero': {
-        password: 'r1t7h-5p9k2-s4w8j',
-        role: 'Совет',
-        branch: 'R-3'
-    },
-    'ddos': {
-        password: 'd4a2s-5f3g7-h8j9k',
-        role: 'Ветвь DA',
-        branch: 'DA'
-    },
-    'osint': {
-        password: 'o1s2i-3n4t5-r6g7h',
-        role: 'Ветвь OR',
-        branch: 'OR'
-    },
-    'crypto': {
-        password: 'c8r7y-2p5t9-k3m1n',
-        role: 'Ветвь CR',
-        branch: 'CR'
-    },
-    'dev': {
-        password: 'd5e6v-8r2t4-x7c9q',
-        role: 'Ветвь CT/AB',
-        branch: 'CT/AB'
-    },
-    'social': {
-        password: 's0c1a-4l6p7-z8x2v',
-        role: 'Ветвь PR',
-        branch: 'PR'
-    },
-    'analyst': {
-        password: 'a9n8l-6y5t3-r2e1w',
-        role: 'Ветвь SC',
-        branch: 'SC'
-    }
-};
+let username = "Гость";
+let lastMessageId = 0;
+let isRefreshing = false;
 
-// ============================================================
-//  ХРАНИЛИЩЕ
-// ============================================================
-const sessions = {};        // token → { username, role, branch }
-const onlineUsers = {};     // username → { role, branch, socketId }
-const messages = [];        // все сообщения с id
-let messageId = 0;
+// ====== ЭЛЕМЕНТЫ ======
+const messagesEl = document.getElementById('messages');
+const usersEl = document.getElementById('users');
+const statusEl = document.getElementById('status');
+const usernameInput = document.getElementById('username');
+const messageInput = document.getElementById('message');
 
-// ============================================================
-//  API — АВТОРИЗАЦИЯ
-// ============================================================
+// ====== ПРИСОЕДИНЕНИЕ ======
+function join() {
+    username = usernameInput.value.trim() || "Гость";
+    socket.emit('join', { username: username });
+    statusEl.textContent = '🟢 В сети: ' + username;
+}
 
-// Логин
-app.post('/api/login', (req, res) => {
-    const { username, password } = req.body;
-    const user = USERS[username];
+usernameInput.addEventListener('change', join);
 
-    if (!user) {
-        return res.status(401).json({ error: 'Позывной не найден' });
-    }
+// ====== ОТПРАВКА ======
+function sendMessage() {
+    const text = messageInput.value.trim();
+    if (!text) return;
+    socket.emit('message', { username: username, message: text });
+    messageInput.value = '';
+}
 
-    if (user.password !== password) {
-        return res.status(401).json({ error: 'Неверный пароль' });
-    }
+// ====== ПОЛУЧЕНИЕ СООБЩЕНИЙ (автообновление) ======
+async function fetchMessages() {
+    if (isRefreshing) return;
+    isRefreshing = true;
 
-    const token = crypto.randomBytes(32).toString('hex');
-    sessions[token] = {
-        username: username,
-        role: user.role,
-        branch: user.branch
-    };
-
-    res.json({
-        token: token,
-        user: {
-            username: username,
-            role: user.role,
-            branch: user.branch
+    try {
+        const res = await fetch(`${SERVER_URL}/api/messages?after=${lastMessageId}`);
+        if (!res.ok) return;
+        
+        const data = await res.json();
+        if (data.messages && data.messages.length > 0) {
+            data.messages.forEach(msg => {
+                if (msg.id > lastMessageId) {
+                    addMessage(msg.username, msg.text, msg.time);
+                    if (msg.id > lastMessageId) lastMessageId = msg.id;
+                }
+            });
         }
-    });
-});
-
-// Проверка токена
-app.post('/api/verify', (req, res) => {
-    const { token } = req.body;
-    const session = sessions[token];
-    if (!session) {
-        return res.status(401).json({ error: 'Неавторизован' });
+        if (data.lastId && data.lastId > lastMessageId) {
+            lastMessageId = data.lastId;
+        }
+    } catch (e) {
+        // тихо падаем
+    } finally {
+        isRefreshing = false;
     }
-    res.json({ valid: true, user: session });
+}
+
+// ====== СОБЫТИЯ SOCKET ======
+
+socket.on('connect', () => {
+    join();
 });
 
-// ============================================================
-//  API — ЧАТ
-// ============================================================
-
-// Статус сервера
-app.get('/api/status', (req, res) => {
-    res.json({
-        status: 'online',
-        users: Object.keys(onlineUsers).length,
-        messages: messages.length
-    });
+socket.on('user_joined', (data) => {
+    addSystemMessage(`👉 ${data.username} присоединился`);
+    updateUsers(data.users);
 });
 
-// Список всех пользователей (с онлайном)
-app.get('/api/users', (req, res) => {
-    const list = Object.entries(USERS).map(([username, data]) => ({
-        username,
-        role: data.role,
-        branch: data.branch,
-        online: !!onlineUsers[username]
-    }));
-    res.json(list);
+socket.on('user_left', (data) => {
+    addSystemMessage(`👈 ${data.username} покинул`);
 });
 
-// ПОЛУЧЕНИЕ СООБЩЕНИЙ (с автообновлением)
-app.get('/api/messages', (req, res) => {
-    const after = parseInt(req.query.after) || 0;
-    const newMessages = messages.filter(m => m.id > after);
-    res.json({
-        messages: newMessages,
-        lastId: messages.length > 0 ? messages[messages.length - 1].id : 0
-    });
+socket.on('new_message', (data) => {
+    addMessage(data.username, data.text, data.time);
+    if (data.id) lastMessageId = data.id;
 });
 
-// ============================================================
-//  SOCKET.IO (с авторизацией)
-// ============================================================
+// ====== ВСПОМОГАТЕЛЬНЫЕ ======
 
-io.use((socket, next) => {
-    const token = socket.handshake.auth.token;
-    if (!token || !sessions[token]) {
-        return next(new Error('Неавторизован'));
+function addMessage(user, text, time) {
+    const div = document.createElement('div');
+    div.className = 'msg';
+    div.innerHTML = `<span class="user">${user}</span><span class="time">${time || ''}</span><div class="text">${text}</div>`;
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function addSystemMessage(text) {
+    const div = document.createElement('div');
+    div.className = 'msg system';
+    div.textContent = text;
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function updateUsers(users) {
+    usersEl.innerHTML = '';
+    if (users) {
+        users.forEach(u => {
+            const span = document.createElement('span');
+            span.className = 'user-badge';
+            span.textContent = '🟢 ' + u;
+            usersEl.appendChild(span);
+        });
     }
-    socket.session = sessions[token];
-    next();
-});
+}
 
-io.on('connection', (socket) => {
-    const { username, role, branch } = socket.session;
-    console.log(`🔌 ${username} (${role} | ${branch}) подключился`);
+// ====== АВТООБНОВЛЕНИЕ (каждые 10 секунд) ======
+setInterval(fetchMessages, 10000);
 
-    // Сохраняем в онлайн
-    onlineUsers[username] = {
-        role,
-        branch,
-        socketId: socket.id
-    };
-
-    // Отправляем новому пользователю его данные
-    socket.emit('auth_success', {
-        username,
-        role,
-        branch,
-        users: Object.keys(onlineUsers)
+// ====== СТАТУС СЕРВЕРА ======
+fetch(`${SERVER_URL}/api/status`)
+    .then(res => res.json())
+    .then(data => {
+        statusEl.textContent = '🟢 Онлайн | Пользователей: ' + data.users + ' | Сообщений: ' + data.messages;
+    })
+    .catch(() => {
+        statusEl.textContent = '🔴 Ошибка подключения к серверу';
     });
-
-    // Всем — что новый пользователь в сети
-    io.emit('user_joined', {
-        username,
-        role,
-        branch,
-        users: Object.keys(onlineUsers)
-    });
-
-    // ====== ОБРАБОТКА СООБЩЕНИЙ ======
-    socket.on('message', (data) => {
-        const msg = {
-            id: ++messageId,
-            username: username,
-            role: role,
-            branch: branch,
-            text: data.message,
-            time: new Date().toLocaleTimeString()
-        };
-        messages.push(msg);
-        if (messages.length > 100) messages.shift();
-
-        // Отправляем всем
-        io.emit('new_message', msg);
-    });
-
-    // ====== ОТКЛЮЧЕНИЕ ======
-    socket.on('disconnect', () => {
-        delete onlineUsers[username];
-        io.emit('user_left', { username });
-        console.log(`⛔ ${username} отключился`);
-    });
-});
-
-// ============================================================
-//  ЗАПУСК СЕРВЕРА
-// ============================================================
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, '0.0.0.0', () => {
-    console.log(`🔴 RedLine Zero сервер запущен на порту ${PORT}`);
-    console.log(`👥 Зарегистрировано пользователей: ${Object.keys(USERS).length}`);
-});
